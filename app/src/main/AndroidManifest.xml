@@ -8,6 +8,7 @@
   <activity android:name=".MainActivity" android:exported="false" />
   <activity android:name=".ProfileActivity" android:exported="false" />
   <activity android:name=".NearbyActivity" android:exported="false" />
+  <activity android:name=".TimedActivity" android:exported="false" />
   <activity android:name=".LaunchActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
  </application>
 </manifest>
