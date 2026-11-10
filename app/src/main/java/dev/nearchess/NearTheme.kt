@@ -32,15 +32,19 @@ private val NearLight=Color(0xFFEDF3EF)
 }
 
 @Composable fun NearLogo(modifier: Modifier=Modifier) {
+ // Read CompositionLocals in the composable scope, before entering DrawScope.
+ val primary=MaterialTheme.colorScheme.primary
+ val onSurface=MaterialTheme.colorScheme.onSurface
+ val container=MaterialTheme.colorScheme.surfaceContainerHigh
  Canvas(modifier.size(82.dp)) {
-  val primary=MaterialTheme.colorScheme.primary; val on=MaterialTheme.colorScheme.onSurface; val w=size.width; val h=size.height
-  drawRoundRect(MaterialTheme.colorScheme.surfaceContainerHigh,style=androidx.compose.ui.graphics.drawscope.Fill)
+  val w=size.width; val h=size.height
+  drawRoundRect(container,style=androidx.compose.ui.graphics.drawscope.Fill)
   val rook=Path().apply {
    moveTo(w*.23f,h*.28f);lineTo(w*.34f,h*.28f);lineTo(w*.34f,h*.20f);lineTo(w*.44f,h*.20f);lineTo(w*.44f,h*.28f);lineTo(w*.56f,h*.28f);lineTo(w*.56f,h*.20f);lineTo(w*.66f,h*.20f);lineTo(w*.66f,h*.28f);lineTo(w*.77f,h*.28f);lineTo(w*.72f,h*.39f);lineTo(w*.68f,h*.73f);lineTo(w*.82f,h*.79f);lineTo(w*.82f,h*.86f);lineTo(w*.18f,h*.86f);lineTo(w*.18f,h*.79f);lineTo(w*.32f,h*.73f);lineTo(w*.28f,h*.39f);close()
   }
   drawPath(rook,primary)
-  // Clear N: left vertical, descending diagonal, right vertical.
+  // Clear Latin N: left vertical, descending diagonal, right vertical.
   val n=Path().apply{moveTo(w*.39f,h*.68f);lineTo(w*.39f,h*.43f);lineTo(w*.61f,h*.68f);lineTo(w*.61f,h*.43f)}
-  drawPath(n,on,style=Stroke(w*.075f))
+  drawPath(n,onSurface,style=Stroke(w*.075f))
  }
 }
