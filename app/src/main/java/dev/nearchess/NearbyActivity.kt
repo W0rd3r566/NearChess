@@ -24,6 +24,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -49,7 +50,7 @@ class NearbyModel: ViewModel() {
  private var lastChat=0L
  fun disconnect() {
   epoch++; task?.cancel(); transport?.close(); transport=null; task=null
-  connected=false; busy=false; pending=false; status="Соединение закрыто. Для новой партии подключитесь снова."
+  connected=false; busy=false; pending=false; status="Соединение закрыто. Подключитесь снова для новой партии."
  }
  fun begin(adapter: BluetoothAdapter,address: String?,name: String) {
   disconnect(); val id=epoch
@@ -58,70 +59,76 @@ class NearbyModel: ViewModel() {
   status=if(hosting) "Ожидаю друга (до 2 минут)…" else "Подключаюсь…"
   task=viewModelScope.launch {
    try {
-    if(hosting) link.host() else link.connect(address!!)
+    if(hosting) link.host() else link.connect(requireNotNull(address))
     link.send(WireMessage(Wire.HELLO,0,JSONObject().put("name",name.take(24)).put("host",hosting).toString()))
     val hello=link.receive(); require(hello.type==Wire.HELLO)
-    val profile=JSONObject(hello.payload); require(profile.getBoolean("host")!=hosting){"Оба телефона выбрали одинаковую роль"}
+    if(id!=epoch) return@launch
+    val profile=JSONObject(hello.payload); require(profile.getBoolean("host")!=hosting){"Одинаковая роль на двух устройствах"}
     peer=profile.optString("name","Друг").take(24); connected=true; busy=false
     status=if(hosting) "Ты за белых" else "Ты за чёрных"
     if(hosting) sendState(link)
     while(id==epoch) {
      val msg=link.receive()
+     if(id!=epoch) break
      when(msg.type) {
-      Wire.MOVE -> if(hosting) {
-       if(session.acceptMove(msg.sequence,false,msg.payload)) {lastMove=parseMove(msg.payload); syncHost()}
+      Wire.MOVE -> {
+       require(hosting)
+       val move=Uci.parse(msg.payload)
+       if(session.acceptMove(msg.sequence,false,move.uci())) {lastMove=move; syncHost()}
        sendState(link)
       }
-      Wire.STATE -> if(!hosting) {
+      Wire.STATE -> {
+       require(!hosting)
        val json=JSONObject(msg.payload); require(msg.sequence>=sequence)
        val restored=Position.fromFen(json.getString("fen"))
-       position=restored; sequence=msg.sequence; result=json.optString("result"); pending=false
-       lastMove=json.optString("last").takeIf{it.length in 4..5}?.let{parseMove(it)}
+       val end=json.optString("result"); require(end in listOf("","1-0","0-1","1/2-1/2"))
+       val last=json.optString("last").takeIf{it.isNotEmpty()}?.let{Uci.parse(it)}
+       position=restored; sequence=msg.sequence; result=end; pending=false; lastMove=last
       }
       Wire.CHAT,Wire.REACTION -> {
        require(msg.payload.length<=500)
        messages=(messages+"$peer: ${msg.payload}").takeLast(100)
       }
-      Wire.RESIGN -> if(hosting) {session.resign(false); syncHost(); sendState(link)}
+      Wire.RESIGN -> {require(hosting); session.resign(false); syncHost(); sendState(link)}
       else -> error("Неожиданное сообщение протокола")
      }
     }
-   } catch(e: Exception) {
-    if(id==epoch) {status="Связь прервана: ${e.message?:"ошибка Bluetooth"}. Позиция оставлена на экране; ходить нельзя."; connected=false; busy=false; pending=false}
-   } finally {link.close()}
+   } catch(e: CancellationException) {throw e}
+   catch(e: Exception) {if(id==epoch) {status="Связь прервана: ${e.message?:"ошибка Bluetooth"}"; connected=false; busy=false; pending=false}}
+   finally {link.close()}
   }
- }
- private fun parseMove(s: String): Move {
-  require(s.length in 4..5 && s[0] in 'a'..'h' && s[2] in 'a'..'h' && s[1] in '1'..'8' && s[3] in '1'..'8')
-  return Move((s[1]-'1')*8+s[0]-'a',(s[3]-'1')*8+s[2]-'a',if(s.length==5) s[4] else ' ')
  }
  private fun syncHost(){position=session.position; sequence=session.sequence; result=session.result}
  private suspend fun sendState(link: BluetoothTransport) {
   link.send(WireMessage(Wire.STATE,session.sequence,JSONObject().put("fen",session.position.fen()).put("result",session.result).put("last",lastMove?.uci()?:"").toString()))
  }
- fun move(m: Move) {
-  if(!connected || pending || result.isNotEmpty() || position.white!=hosting || m !in position.legal()) return
-  val link=transport?:return
-  pending=true
+ private fun launchSend(block: suspend (BluetoothTransport)->Unit) {
+  val link=transport?:return; val id=epoch
   viewModelScope.launch {
-   try {
-    if(hosting) {
-     if(session.acceptMove(sequence,true,m.uci())) {lastMove=m; syncHost(); sendState(link)}
-     pending=false
-    } else link.send(WireMessage(Wire.MOVE,sequence,m.uci()))
-   } catch(e: Exception){disconnect(); status="Не удалось отправить ход"}
+   try {block(link)} catch(e: CancellationException){throw e}
+   catch(e: Exception){if(id==epoch){disconnect(); status="Ошибка передачи: ${e.message}"}}
   }
  }
- fun chat(text: String,reaction: Boolean=false) {
-  if(!connected || text.isBlank()) return
-  val now=android.os.SystemClock.elapsedRealtime(); if(now-lastChat<1000) return
-  lastChat=now; val clean=text.trim().take(500); val link=transport?:return
-  viewModelScope.launch {try {link.send(WireMessage(if(reaction) Wire.REACTION else Wire.CHAT,sequence,clean)); messages=(messages+"Я: $clean").takeLast(100)} catch(e: Exception){disconnect(); status="Не удалось отправить сообщение"}}
+ fun move(m: Move) {
+  if(!connected || pending || result.isNotEmpty() || position.white!=hosting || m !in position.legal()) return
+  pending=true
+  if(hosting) {
+   if(session.acceptMove(sequence,true,m.uci())) {lastMove=m; syncHost(); launchSend{sendState(it)}}
+   pending=false
+  } else launchSend{it.send(WireMessage(Wire.MOVE,sequence,m.uci()))}
+ }
+ fun chat(text: String,reaction: Boolean=false): Boolean {
+  if(!connected || text.isBlank()) return false
+  val now=android.os.SystemClock.elapsedRealtime(); if(now-lastChat<1000) return false
+  lastChat=now; val clean=text.trim().take(500)
+  messages=(messages+"Я: $clean").takeLast(100)
+  launchSend{it.send(WireMessage(if(reaction) Wire.REACTION else Wire.CHAT,sequence,clean))}
+  return true
  }
  fun resign() {
-  if(!connected || result.isNotEmpty()) return
-  val link=transport?:return
-  viewModelScope.launch {try{if(hosting){session.resign(true); syncHost(); sendState(link)}else{pending=true; link.send(WireMessage(Wire.RESIGN,sequence,""))}}catch(e: Exception){disconnect()}}
+  if(!connected || pending || result.isNotEmpty()) return
+  if(hosting){session.resign(true); syncHost(); launchSend{sendState(it)}}
+  else {pending=true; launchSend{it.send(WireMessage(Wire.RESIGN,sequence,""))}}
  }
  override fun onCleared(){transport?.close(); super.onCleared()}
 }
@@ -153,16 +160,16 @@ class NearbyModel: ViewModel() {
     if(adapter==null) Text("Устройство не поддерживает Bluetooth")
     else if(!permission) Button(onClick={if(Build.VERSION.SDK_INT>=31) request.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT,Manifest.permission.BLUETOOTH_ADVERTISE))}){Text("Разрешить Bluetooth")}
     else {
-     Button(onClick={runCatching{enable.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))}.onFailure{localError=it.message?:"Не удалось открыть Bluetooth"}}){Text("Включить Bluetooth")}
-     FilledTonalButton(onClick={runCatching{discover.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,120))}.onFailure{localError="Разрешите обнаружение устройств в настройках"}}){Text("Сделать телефон видимым")}
-     Button(onClick={runCatching{check(adapter.isEnabled){"Включите Bluetooth"}; vm.begin(adapter,null,name)}.onFailure{localError=it.message?:"Ошибка"}}){Text("Создать новую партию · белые")}
-     Text("Для первого подключения выполните сопряжение телефонов в системных настройках Bluetooth. Друг создаёт партию, затем выберите его ниже.",style=MaterialTheme.typography.bodySmall)
+     Button(onClick={runCatching{enable.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))}.onFailure{localError="Не удалось включить Bluetooth"}}){Text("Включить Bluetooth")}
+     FilledTonalButton(onClick={runCatching{discover.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,120))}.onFailure{localError="Разрешите обнаружение в настройках"}}){Text("Сделать телефон видимым")}
+     Button(onClick={runCatching{check(adapter.isEnabled){"Включите Bluetooth"}; vm.begin(adapter,null,name)}.onFailure{localError=it.message?:"Ошибка"}}){Text("Создать партию · белые")}
+     Text("Сначала выполните сопряжение телефонов в настройках Android. Друг создаёт партию; затем выберите его ниже.",style=MaterialTheme.typography.bodySmall)
      OutlinedButton(onClick={context.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))}){Text("Настройки Bluetooth")}
      TextButton(onClick={refresh()}){Text("Обновить список")}
-     devices.forEach{(label,address) -> OutlinedButton(onClick={vm.begin(adapter,address,name)},modifier=Modifier.fillMaxWidth()){Text("$label · подключиться за чёрных")}}
+     devices.forEach{(label,address) -> OutlinedButton(onClick={vm.begin(adapter,address,name)},modifier=Modifier.fillMaxWidth()){Text("$label · за чёрных")}}
     }
    }
-   if(vm.busy) {LinearProgressIndicator(Modifier.fillMaxWidth()); TextButton(onClick={vm.disconnect()}){Text("Отменить подключение")}}
+   if(vm.busy) {LinearProgressIndicator(Modifier.fillMaxWidth()); TextButton(onClick={vm.disconnect()}){Text("Отменить")}}
    if(vm.connected || vm.sequence>0) {
     Text("$name — ${vm.peer}",style=MaterialTheme.typography.titleMedium)
     Text(vm.result.ifEmpty{if(vm.position.white) "Ход белых" else "Ход чёрных"})
@@ -172,11 +179,11 @@ class NearbyModel: ViewModel() {
      vm.messages.takeLast(20).forEach{Text(it,style=MaterialTheme.typography.bodyMedium)}
      Row {listOf("😂","🤔","😎","🤝").forEach{emoji -> TextButton(enabled=vm.connected,onClick={vm.chat(emoji,true)}){Text(emoji)}}}
      OutlinedTextField(value=draft,onValueChange={draft=it.take(500)},label={Text("Сообщение другу")},modifier=Modifier.fillMaxWidth())
-     Button(enabled=vm.connected && draft.isNotBlank(),onClick={vm.chat(draft); draft=""}){Text("Отправить")}
+     Button(enabled=vm.connected && draft.isNotBlank(),onClick={if(vm.chat(draft)) draft=""}){Text("Отправить")}
     }
    }
   }
  }
  if(confirmResign) AlertDialog(onDismissRequest={confirmResign=false},title={Text("Сдаться?")},confirmButton={TextButton(onClick={vm.resign(); confirmResign=false}){Text("Сдаться")}},dismissButton={TextButton(onClick={confirmResign=false}){Text("Продолжить")}})
- if(confirmDisconnect) AlertDialog(onDismissRequest={confirmDisconnect=false},title={Text("Закрыть соединение?")},text={Text("Автовосстановление этой партии пока не реализовано.")},confirmButton={TextButton(onClick={vm.disconnect(); confirmDisconnect=false}){Text("Отключиться")}},dismissButton={TextButton(onClick={confirmDisconnect=false}){Text("Отмена")}})
+ if(confirmDisconnect) AlertDialog(onDismissRequest={confirmDisconnect=false},title={Text("Закрыть соединение?")},text={Text("Автовосстановление партии пока не реализовано.")},confirmButton={TextButton(onClick={vm.disconnect(); confirmDisconnect=false}){Text("Отключиться")}},dismissButton={TextButton(onClick={confirmDisconnect=false}){Text("Отмена")}})
 }
