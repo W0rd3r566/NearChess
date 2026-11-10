@@ -4,7 +4,7 @@
  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
  <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
  <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
- <application android:label="NearChess" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+ <application android:label="NearChess" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
   <activity android:name=".MainActivity" android:exported="false" />
   <activity android:name=".ProfileActivity" android:exported="false" />
   <activity android:name=".NearbyActivity" android:exported="false" />
