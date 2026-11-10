@@ -11,8 +11,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,15 +28,15 @@ class LaunchActivity: ComponentActivity(){
 @Composable private fun LaunchScreen() {
  val context=LocalContext.current; var tab by remember{mutableStateOf(0)}; val wide=LocalConfiguration.current.screenWidthDp>=600
  Scaffold(containerColor=MaterialTheme.colorScheme.surface,bottomBar={NavigationBar {
-  NavigationBarItem(tab==0,{tab=0},{Icon(Icons.Filled.SportsEsports,"Играть")},{Text("Играть")})
-  NavigationBarItem(tab==1,{tab=1},{Icon(Icons.Filled.School,"Тренировка")},{Text("Тренировка")})
-  NavigationBarItem(tab==2,{tab=2;context.startActivity(Intent(context,ProfileActivity::class.java))},{Icon(Icons.Filled.Person,"Профиль")},{Text("Профиль")})
+  NavigationBarItem(selected=tab==0,onClick={tab=0},icon={Icon(Icons.Filled.SportsEsports,"Играть")},label={Text("Играть")})
+  NavigationBarItem(selected=tab==1,onClick={tab=1},icon={Icon(Icons.Filled.School,"Тренировка")},label={Text("Тренировка")})
+  NavigationBarItem(selected=tab==2,onClick={tab=2;context.startActivity(Intent(context,ProfileActivity::class.java))},icon={Icon(Icons.Filled.Person,"Профиль")},label={Text("Профиль")})
  }}) { p ->
   BoxWithConstraints(Modifier.fillMaxSize().padding(p)) {
    val max=if(wide) 840.dp else 600.dp
    Column(Modifier.fillMaxWidth().widthIn(max=max).align(Alignment.TopCenter).padding(horizontal=NearTokens.Space4,vertical=NearTokens.Space3),verticalArrangement=Arrangement.spacedBy(NearTokens.Space4)) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {NearLogo(Modifier.size(56.dp));Spacer(Modifier.width(NearTokens.Space3));Column(Modifier.weight(1f)){Text("NearChess",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text("Шахматы рядом",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)};IconButton(onClick={context.startActivity(Intent(context,ProfileActivity::class.java))}){Icon(Icons.Filled.Person,"Профиль")}}
-    AnimatedContent(tab,transitionSpec={fadeIn() togetherWith fadeOut()},label="home content") { selected ->
+    AnimatedContent(targetState=tab,transitionSpec={fadeIn() togetherWith fadeOut()},label="home content") { selected ->
      Column(verticalArrangement=Arrangement.spacedBy(NearTokens.Space4)) {
       Text(if(selected==0) "Играть" else "Тренировка",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
       if(selected==0) {
