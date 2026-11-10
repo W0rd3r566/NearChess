@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
  id("com.android.application")
  id("org.jetbrains.kotlin.android")
@@ -12,7 +14,7 @@ val preparePieces by tasks.registering {
   val base="https://raw.githubusercontent.com/lichess-org/lila/$revision/"
   fun fetch(url:String,path:String) {
    val file=root.resolve(path); file.parentFile.mkdirs()
-   val connection=java.net.URI(url).toURL().openConnection()
+   val connection=URI(url).toURL().openConnection()
    connection.connectTimeout=30000; connection.readTimeout=30000
    connection.getInputStream().use { input -> file.outputStream().use {input.copyTo(it)} }
   }
