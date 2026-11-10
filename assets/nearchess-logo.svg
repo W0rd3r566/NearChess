@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
  <title id="title">NearChess logo</title>
- <desc id="desc">Mint rook with an N-shaped cut line on a graphite rounded square</desc>
+ <desc id="desc">Mint rook with a clear N-shaped cut line on a graphite rounded square</desc>
  <rect width="512" height="512" rx="112" fill="#121A1C"/>
  <path fill="#71D8BC" d="M116 148h56v-38h52v38h64v-38h52v38h56l-26 56-19 170 38 19v37H123v-37l38-19-19-170-26-56Zm61 80 18 136h122l18-136H177Z"/>
- <path d="M205 226v106l102-106v106" fill="none" stroke="#EDF3EF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+ <!-- Conventional N: left vertical, descending diagonal, right vertical -->
+ <path d="M205 332V226l102 106V226" fill="none" stroke="#EDF3EF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

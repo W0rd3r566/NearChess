@@ -39,7 +39,8 @@ private val NearLight=Color(0xFFEDF3EF)
    moveTo(w*.23f,h*.28f);lineTo(w*.34f,h*.28f);lineTo(w*.34f,h*.20f);lineTo(w*.44f,h*.20f);lineTo(w*.44f,h*.28f);lineTo(w*.56f,h*.28f);lineTo(w*.56f,h*.20f);lineTo(w*.66f,h*.20f);lineTo(w*.66f,h*.28f);lineTo(w*.77f,h*.28f);lineTo(w*.72f,h*.39f);lineTo(w*.68f,h*.73f);lineTo(w*.82f,h*.79f);lineTo(w*.82f,h*.86f);lineTo(w*.18f,h*.86f);lineTo(w*.18f,h*.79f);lineTo(w*.32f,h*.73f);lineTo(w*.28f,h*.39f);close()
   }
   drawPath(rook,primary)
-  val n=Path().apply{moveTo(w*.39f,h*.43f);lineTo(w*.39f,h*.68f);lineTo(w*.61f,h*.43f);lineTo(w*.61f,h*.68f)}
+  // Clear N: left vertical, descending diagonal, right vertical.
+  val n=Path().apply{moveTo(w*.39f,h*.68f);lineTo(w*.39f,h*.43f);lineTo(w*.61f,h*.68f);lineTo(w*.61f,h*.43f)}
   drawPath(n,on,style=Stroke(w*.075f))
  }
 }
