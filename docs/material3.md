@@ -1,9 +1,5 @@
-# Material 3 implementation notes
+# Material 3 audit notes
 
-Applied the Compose-first Material 3 guidance from:
-- https://m3.material.io/
-- https://github.com/hamen/material-3-skill
+The entry screen now uses semantic Material 3 roles, `Scaffold`, `NavigationBar`, `ListItem`, `OutlinedCard`, `FilledTonalButton`, adaptive max width at 600dp, 8dp spacing tokens, Material icons, a local transition, and insets through Scaffold padding. Raw one-off button rows and emoji pseudo-icons were removed.
 
-The entry screen now uses a centralized `NearTheme`, dynamic dark color on Android 12+, semantic Material color roles, Material typography, 8dp-based spacing, large accessible touch targets and Material shapes. The logo is original vector-like Canvas artwork: a rook with an N cut-line; no Chess.com artwork is used.
-
-The rest of the app is not yet fully migrated to this theme. A follow-up audit should remove raw colors from existing screens, add dynamic light/dark preference, adaptive layouts and TalkBack semantics to the Canvas board.
+The interface still needs a full-project audit: existing game/profile/Bluetooth screens use some raw colors and have not yet been migrated to `NearTheme`; the board needs TalkBack semantics and adaptive testing. See the official guide at https://m3.material.io/ and the supplied reference https://github.com/hamen/material-3-skill.
