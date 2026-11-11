@@ -1,6 +1,7 @@
 package dev.nearchess
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
 
 enum class BotLevel(val title:String,val depth:Int,val budget:Int,val positional:Boolean){
  NOVICE("Новичок",1,300,false), AMATEUR("Любитель",2,1500,false),
@@ -9,7 +10,14 @@ enum class BotLevel(val title:String,val depth:Int,val budget:Int,val positional
  MASTER("Мастер",7,220000,true), MAXIMUM("Максимум",9,450000,true)
 }
 data class BotSearchResult(val move:Move?,val completedDepth:Int,val nodes:Int)
-internal suspend fun chooseTrainingMove(p:Position,level:BotLevel=BotLevel.STUDENT):Move?=searchTraining(p,level).move
+internal suspend fun chooseTrainingMove(p:Position,level:BotLevel=BotLevel.STUDENT):Move?{
+ val start=System.nanoTime()
+ val result=searchTraining(p,level)
+ val target=850L+((p.board.hashCode().toLong() and 0x7fffffff)%550)
+ val elapsed=(System.nanoTime()-start)/1000000
+ if(result.move!=null && elapsed<target)delay(target-elapsed)
+ return result.move
+}
 internal suspend fun searchTraining(position:Position,level:BotLevel):BotSearchResult {
  val ctx=currentCoroutineContext();var nodes=0
  val start=System.nanoTime();val timeout=if(level==BotLevel.MAXIMUM)8000000000L else 3000000000L
@@ -42,10 +50,21 @@ internal suspend fun searchTraining(position:Position,level:BotLevel):BotSearchR
  var best=legal.first();var completed=0
  for(depth in 1..level.depth){
   var candidate=best;var score=Int.MIN_VALUE
+  val scored=mutableListOf<Pair<Move,Int>>()
   try {
    for(m in legal.sortedByDescending{if(it==best)100000 else value(position.board[it.to])}){
     val v=-search(position.play(m),depth-1,-200000,200000)
+    scored.add(m to v)
     if(v>score){score=v;candidate=m}
+   }
+   if(level==BotLevel.NOVICE || level==BotLevel.AMATEUR){
+    // Controlled suboptimality among evaluated legal moves; never arbitrary illegal moves.
+    val allowance=if(level==BotLevel.NOVICE)220 else 90
+    val choices=scored.filter{it.second>=score-allowance}.sortedByDescending{it.second}
+    if(choices.isNotEmpty()){
+     val seed=position.board.hashCode().toLong() and 0x7fffffff
+     candidate=choices[(seed%minOf(choices.size,if(level==BotLevel.NOVICE)5 else 3)).toInt()].first
+    }
    }
    best=candidate;completed=depth
   }catch(e:BudgetReached){break}
