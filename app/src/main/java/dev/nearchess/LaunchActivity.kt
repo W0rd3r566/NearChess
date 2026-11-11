@@ -4,49 +4,77 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-class LaunchActivity: ComponentActivity(){
- override fun onCreate(savedInstanceState: Bundle?) {super.onCreate(savedInstanceState);setContent{NearTheme{LaunchScreen()}}}
-}
-@Composable private fun LaunchScreen() {
- val context=LocalContext.current; var tab by remember{mutableStateOf(0)}; val wide=LocalConfiguration.current.screenWidthDp>=600
- Scaffold(containerColor=MaterialTheme.colorScheme.surface,bottomBar={NavigationBar {
-  NavigationBarItem(selected=tab==0,onClick={tab=0},icon={Icon(Icons.Filled.SportsEsports,"Играть")},label={Text("Играть")})
-  NavigationBarItem(selected=tab==1,onClick={tab=1},icon={Icon(Icons.Filled.School,"Тренировка")},label={Text("Тренировка")})
-  NavigationBarItem(selected=tab==2,onClick={tab=2;context.startActivity(Intent(context,ProfileActivity::class.java))},icon={Icon(Icons.Filled.Person,"Профиль")},label={Text("Профиль")})
- }}) { p ->
-  BoxWithConstraints(Modifier.fillMaxSize().padding(p)) {
-   val max=if(wide) 840.dp else 600.dp
-   Column(Modifier.fillMaxWidth().widthIn(max=max).align(Alignment.TopCenter).padding(horizontal=NearTokens.Space4,vertical=NearTokens.Space3),verticalArrangement=Arrangement.spacedBy(NearTokens.Space4)) {
-    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {NearLogo(Modifier.size(56.dp));Spacer(Modifier.width(NearTokens.Space3));Column(Modifier.weight(1f)){Text("NearChess",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text("Шахматы рядом",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)};IconButton(onClick={context.startActivity(Intent(context,ProfileActivity::class.java))}){Icon(Icons.Filled.Person,"Профиль")}}
-    AnimatedContent(targetState=tab,transitionSpec={fadeIn() togetherWith fadeOut()},label="home content") { selected ->
-     Column(verticalArrangement=Arrangement.spacedBy(NearTokens.Space4)) {
-      Text(if(selected==0) "Играть" else "Тренировка",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-      if(selected==0) {
-       Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer),shape=MaterialTheme.shapes.extraLarge) {Column(Modifier.padding(NearTokens.Space5),verticalArrangement=Arrangement.spacedBy(NearTokens.Space3)){Text("С другом рядом",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text("Bluetooth · без интернета · без аккаунта");Button(onClick={context.startActivity(Intent(context,NearbyActivity::class.java))},modifier=Modifier.fillMaxWidth()){Text("Создать или присоединиться")}}}
-       Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(NearTokens.Space3)){FilledTonalButton(onClick={context.startActivity(Intent(context,MainActivity::class.java))},modifier=Modifier.weight(1f).height(72.dp)){Text("Один телефон",fontWeight=FontWeight.SemiBold)};FilledTonalButton(onClick={context.startActivity(Intent(context,TimedActivity::class.java))},modifier=Modifier.weight(1f).height(72.dp)){Text("Блиц\n3+2 · 5+0",fontWeight=FontWeight.SemiBold)}}
-       Text("Недавнее",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);OutlinedCard(Modifier.fillMaxWidth()){ListItem(headlineContent={Text("Офлайн-партия")},supportingContent={Text("Продолжить сохранённую игру")},trailingContent={TextButton(onClick={context.startActivity(Intent(context,MainActivity::class.java))}){Text("Открыть")}})}
-      } else {Card(Modifier.fillMaxWidth(),shape=MaterialTheme.shapes.extraLarge){ListItem(headlineContent={Text("Против бота")},supportingContent={Text("Тренировка без рейтинга")},trailingContent={Button(onClick={context.startActivity(Intent(context,MainActivity::class.java))}){Text("Играть")}})};Text("Скоро: задачи, подсказки и Stockfish",color=MaterialTheme.colorScheme.onSurfaceVariant)}
-     }
-    }
+class LaunchActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent{NearTheme{LaunchScreen()}}}}
+@Composable private fun LaunchScreen(){
+ val context=LocalContext.current
+ var page by remember{mutableStateOf(0)}
+ fun open(type:Class<*>){context.startActivity(Intent(context,type))}
+ BackHandler(enabled=page!=0){page=0}
+ Scaffold(bottomBar={NavigationBar{
+  NavigationBarItem(selected=page==0,onClick={page=0},icon={Icon(Icons.Default.SportsEsports,null)},label={Text("Играть")})
+  NavigationBarItem(selected=page==1,onClick={page=1},icon={Icon(Icons.Default.History,null)},label={Text("Партии")})
+  NavigationBarItem(selected=page==2,onClick={page=2},icon={Icon(Icons.Default.Settings,null)},label={Text("Настройки")})
+ }}){padding->Box(Modifier.fillMaxSize().padding(padding)){
+  when(page){
+   1->ArchiveScreen(onBack={page=0})
+   2->AppearanceScreen()
+   else->Column(Modifier.fillMaxSize().padding(horizontal=20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)){
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment=Alignment.CenterVertically){NearLogo(Modifier.size(48.dp));Spacer(Modifier.width(12.dp));Column(Modifier.weight(1f)){Text("NearChess",style=MaterialTheme.typography.titleLarge);Text("Шахматы рядом",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)};IconButton(onClick={open(ProfileActivity::class.java)}){Icon(Icons.Default.Person,"Профиль")}}
+    val name=context.getSharedPreferences("profile",0).getString("nickname","Игрок")?:"Игрок"
+    Text("Твой ход, $name",style=MaterialTheme.typography.headlineSmall)
+    Text("Выбери соперника. Всё работает без сервера.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.primaryContainer){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+     Text("Новая партия",style=MaterialTheme.typography.titleLarge)
+     Text("Бот с выбором сложности или друг на одном экране.",style=MaterialTheme.typography.bodyMedium)
+     Button(onClick={open(MainActivity::class.java)},modifier=Modifier.fillMaxWidth()){Text("Выбрать игру")}
+    }}
+    HomeRow("С другом по Bluetooth","Создать партию или подключиться",Icons.Default.Bluetooth){open(NearbyActivity::class.java)}
+    HomeRow("Партия с часами","3+2 · 5+0 · 10+5",Icons.Default.Timer){open(TimedActivity::class.java)}
+    if(context.getSharedPreferences("game",0).contains("positions"))HomeRow("Сохранённая партия","Открыть локальные режимы и продолжить",Icons.Default.PlayArrow){open(MainActivity::class.java)}
+    HomeRow("История партий","${GameArchive(context).all().size} завершённых",Icons.Default.History){page=1}
+    HomeRow("Профиль","Ник и собственное фото",Icons.Default.Person){open(ProfileActivity::class.java)}
+    Spacer(Modifier.height(8.dp))
    }
   }
+ }}
+}
+@Composable private fun HomeRow(title:String,subtitle:String,icon:androidx.compose.ui.graphics.vector.ImageVector,onClick:()->Unit){
+ Surface(onClick=onClick,shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainerLow){ListItem(leadingContent={Icon(icon,null,tint=MaterialTheme.colorScheme.primary)},headlineContent={Text(title)},supportingContent={Text(subtitle)},trailingContent={Icon(Icons.Default.ChevronRight,null)})}
+}
+@Composable private fun AppearanceScreen(){
+ val context=LocalContext.current
+ val board=remember{context.getSharedPreferences("board",0)}
+ val game=remember{context.getSharedPreferences("game",0)}
+ var palette by remember{mutableStateOf(game.getInt("theme",0).coerceIn(boardPalettes.indices))}
+ var set by remember{mutableStateOf(board.getString("pieces","cburnett")?:"cburnett")}
+ var animations by remember{mutableStateOf(board.getBoolean("animations",true))}
+ Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)){
+  Text("Оформление",style=MaterialTheme.typography.headlineSmall)
+  Text("Доска",style=MaterialTheme.typography.titleMedium)
+  boardPalettes.forEachIndexed{i,p->FilterChip(selected=palette==i,onClick={palette=i;game.edit().putInt("theme",i).apply()},label={Text(p.name)})}
+  HorizontalDivider()
+  Text("Векторные фигуры",style=MaterialTheme.typography.titleMedium)
+  listOf("cburnett","chessnut","spatial").forEach{s->FilterChip(selected=set==s,onClick={set=s;board.edit().putString("pieces",s).apply()},label={Text(s.replaceFirstChar{it.uppercase()})})}
+  Row(verticalAlignment=Alignment.CenterVertically){Text("Анимации и эффекты",Modifier.weight(1f));Switch(checked=animations,onCheckedChange={animations=it;board.edit().putBoolean("animations",it).apply()})}
+  Text("Настройки применяются при открытии доски. В самой партии набор фигур меняется сразу через меню доски.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  HorizontalDivider()
+  Text("О NearChess",style=MaterialTheme.typography.titleMedium)
+  val version=remember{runCatching{context.packageManager.getPackageInfo(context.packageName,0).versionName}.getOrNull()?:""}
+  Text("Версия $version",style=MaterialTheme.typography.bodyMedium)
+  Text("Офлайн-шахматы · исходники на GitHub",style=MaterialTheme.typography.bodySmall)
  }
 }
