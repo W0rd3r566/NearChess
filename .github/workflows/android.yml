@@ -19,13 +19,24 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: gradle testDebugUnitTest assembleDebug --stacktrace
+      - name: Name APK and record provenance
+        shell: bash
+        run: |
+          mkdir -p dist
+          NAME="NearChess-0.3.0-alpha.${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:7}-debug"
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/${NAME}.apk"
+          cp app/build/outputs/apk/debug/output-metadata.json dist/output-metadata.json
+          printf 'Commit: %s\nRun: %s\nChannel: alpha / debug\n' "$GITHUB_SHA" "$GITHUB_RUN_NUMBER" > dist/BUILD.txt
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+          echo "### ${NAME}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Test build, not a production release. See BUILD.txt and output-metadata.json in the artifact.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-reports
+          name: test-reports-${{ github.run_number }}
           path: app/build/reports/tests/
       - uses: actions/upload-artifact@v4
         with:
-          name: NearChess-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: NearChess-0.3.0-alpha.${{ github.run_number }}-debug
+          path: dist/
           if-no-files-found: error
