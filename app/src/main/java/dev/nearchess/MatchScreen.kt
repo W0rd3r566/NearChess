@@ -14,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -30,6 +29,16 @@ import androidx.compose.ui.unit.dp
  var theme by remember{mutableStateOf(prefs.getInt("theme",0).coerceIn(boardPalettes.indices))}
  val finalStatus=if(live.legal().isEmpty())if(live.check())"Мат" else "Ничья" else if(live.insufficient())"Ничья" else ""
  GameFeedback(history,finalStatus)
+ val takenWhite=remember(history,index){capturesBy(history.take(index+1),true)}
+ val takenBlack=remember(history,index){capturesBy(history.take(index+1),false)}
+ val balance=remember(shown){materialFor(shown,true)-materialFor(shown,false)}
+ val localMatch=context is MainActivity
+ val bot=localMatch && prefs.getBoolean("bot",false)
+ val playerWhite=prefs.getBoolean("playerWhite",true)
+ val photo=java.io.File(context.filesDir,"profile-avatar.jpg").takeIf{it.exists()}?.let{android.net.Uri.fromFile(it).toString()}
+ val ended=shown.legal().isEmpty() || shown.insufficient() || finalStatus.isNotEmpty() || status.contains("Сдача") || status.startsWith("Ничья")
+ val white=PlayerUiModel(whiteName,if(localMatch && (!bot||playerWhite))photo else null,!ended && shown.white,takenWhite,balance.coerceAtLeast(0),true,bot && !playerWhite)
+ val black=PlayerUiModel(blackName,if(localMatch && bot && !playerWhite)photo else null,!ended && !shown.white,takenBlack,(-balance).coerceAtLeast(0),false,bot && playerWhite)
  BackHandler{onBack()}
  Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
   Column(Modifier.fillMaxSize().systemBarsPadding()){
@@ -39,11 +48,13 @@ import androidx.compose.ui.unit.dp
     IconButton(onClick={menu=true}){Icon(Icons.Default.MoreVert,"Меню партии")}
    }
    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()){
-    val side=minOf(maxWidth,maxHeight-164.dp).coerceAtLeast(96.dp)
+    val side=minOf(maxWidth,maxHeight-152.dp).coerceAtLeast(96.dp)
     Column(Modifier.width(side).align(Alignment.Center)){
-     PlayerPanel(if(flipped)whiteName else blackName,if(flipped)whiteClock else blackClock,if(flipped)shown.white else !shown.white,if(flipped)"БЕЛЫЕ" else "ЧЁРНЫЕ")
+     val top=if(flipped)white else black;val topClock=if(flipped)whiteClock else blackClock
+     PlayerPanel(top,clockContent=if(topClock!="Без часов" && topClock.isNotBlank())({PlayerClock(topClock,top.isTurn)})else null)
      ChessBoard(shown,flipped,enabled && browsing==null,boardPalettes[theme],if(browsing==null)lastMove else null,onMove)
-     PlayerPanel(if(flipped)blackName else whiteName,if(flipped)blackClock else whiteClock,if(flipped)!shown.white else shown.white,if(flipped)"ЧЁРНЫЕ" else "БЕЛЫЕ")
+     val bottom=if(flipped)black else white;val bottomClock=if(flipped)blackClock else whiteClock
+     PlayerPanel(bottom,clockContent=if(bottomClock!="Без часов" && bottomClock.isNotBlank())({PlayerClock(bottomClock,bottom.isTurn)})else null)
     }
    }
    LazyRow(Modifier.fillMaxWidth().height(44.dp).background(MaterialTheme.colorScheme.surfaceContainerLow),contentPadding=PaddingValues(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically){itemsIndexed(notation){i,s->Text((if(history.getOrNull(i)?.white==true)"${history[i].full}. " else "")+s,color=if(index==i+1)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.labelLarge,modifier=Modifier.clickable{browsing=i+1}.padding(8.dp))}}
@@ -51,7 +62,7 @@ import androidx.compose.ui.unit.dp
     IconButton(onClick={flipped=!flipped}){Icon(Icons.Default.SwapVert,"Повернуть")}
     IconButton(enabled=index>0,onClick={browsing=index-1}){Icon(Icons.Default.ChevronLeft,"Назад по истории")}
     IconButton(enabled=index<history.lastIndex,onClick={browsing=if(index+1==history.lastIndex)null else index+1}){Icon(Icons.Default.ChevronRight,"Вперёд по истории")}
-    IconButton(onClick={browsing=null}){Icon(Icons.Default.History,"Текущая позиция")}
+    if(browsing!=null)FilledTonalButton(onClick={browsing=null}){Text("К игре")}else IconButton(onClick={browsing=null}){Icon(Icons.Default.History,"Текущая позиция")}
    }
   }
  }
@@ -62,13 +73,5 @@ import androidx.compose.ui.unit.dp
    boardPalettes.forEachIndexed{i,p->TextButton(onClick={theme=i;prefs.edit().putInt("theme",i).apply()}){Text((if(theme==i)"✓ " else "")+p.name)}}
    HorizontalDivider();FeedbackControls();HorizontalDivider();menuContent()
   }
- }
-}
-@Composable private fun PlayerPanel(name:String,time:String,active:Boolean,side:String){
- val colors=MaterialTheme.colorScheme
- Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){
-  Surface(shape=MaterialTheme.shapes.medium,color=if(active)colors.primaryContainer else colors.surfaceContainerHigh,modifier=Modifier.size(36.dp)){Box(contentAlignment=Alignment.Center){Text(name.firstOrNull()?.uppercase()?:"?",style=MaterialTheme.typography.titleMedium)}}
-  Column(Modifier.weight(1f)){Text(name,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleSmall);Text(side,style=MaterialTheme.typography.labelSmall,color=if(active)colors.primary else colors.onSurfaceVariant)}
-  Surface(shape=MaterialTheme.shapes.small,color=if(active)colors.primaryContainer else colors.surfaceContainerHigh){Text(time,Modifier.padding(horizontal=12.dp,vertical=8.dp),fontFamily=FontFamily.Monospace,style=MaterialTheme.typography.titleMedium)}
  }
 }
