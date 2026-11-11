@@ -1,27 +1,60 @@
 package dev.nearchess
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.*
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.content.SharedPreferences
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.math.*
 
-/** Local presentation only: feedback never changes a position or network state. */
-@Composable internal fun GameFeedback(history:List<Position>, result:String) {
+/** Original procedural audio: offline PCM, not copied third-party assets. */
+private class ChessAudio {
+ private var track:AudioTrack?=null
+ @Synchronized fun play(capture:Boolean,ending:Boolean,draw:Boolean){
+  close()
+  val rate=22050
+  val duration=if(ending).32 else if(capture).11 else .065
+  val count=(rate*duration).toInt()
+  var seed=719
+  val data=ShortArray(count){i->
+   val t=i.toDouble()/rate
+   seed=seed*1664525+1013904223
+   val noise=((seed ushr 9)/4194303.5-1.0)
+   val sample=if(ending){
+    val envelope=sin(PI*i/count).pow(2)*.16
+    (sin(2*PI*440*t)+sin(2*PI*(if(draw)550 else 660)*t))*.5*envelope
+   }else{
+    val attack=(t/.0015).coerceAtMost(1.0)
+    val f=if(capture)600.0 else 920.0
+    val body=sin(2*PI*f*t)*exp(-t*(if(capture)55 else 85))
+    val click=noise*exp(-t*220)*.6
+    (body*.55+click)*attack*.45
+   }
+   (sample.coerceIn(-1.0,1.0)*32767).toInt().toShort()
+  }
+  val audio=AudioTrack.Builder()
+   .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+   .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+   .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(data.size*2).build()
+  track=audio
+  if(audio.state==AudioTrack.STATE_INITIALIZED){audio.write(data,0,data.size);audio.play()}
+ }
+ @Synchronized fun close(){track?.let{runCatching{it.stop()};it.release()};track=null}
+}
+@Composable internal fun GameFeedback(history:List<Position>,result:String){
  val context=LocalContext.current
  val prefs=remember{context.getSharedPreferences("feedback",0)}
- val audio=remember{context.getSystemService(AudioManager::class.java)}
- val tone=remember{runCatching{ToneGenerator(AudioManager.STREAM_MUSIC,45)}.getOrNull()}
- DisposableEffect(tone){onDispose{tone?.release()}}
+ val manager=remember{context.getSystemService(AudioManager::class.java)}
+ val sound=remember{ChessAudio()}
+ DisposableEffect(sound){onDispose{sound.close()}}
  var previous by remember{mutableStateOf(history.last())}
  var previousSize by remember{mutableStateOf(history.size)}
  var announced by remember{mutableStateOf(false)}
@@ -33,27 +66,23 @@ import kotlinx.coroutines.delay
   if(!advanced)return@LaunchedEffect
   val terminal=result.isNotEmpty() && !announced
   if(terminal)announced=true
-  val quiet=audio?.ringerMode!=AudioManager.RINGER_MODE_NORMAL || audio.getStreamVolume(AudioManager.STREAM_MUSIC)==0
-  if(!quiet && prefs.getBoolean("sound",false)) {
-   val captured=current.board.count{it!='.'}<old.board.count{it!='.'}
-   val type=when{terminal && result.contains("Ничья",true)->ToneGenerator.TONE_PROP_ACK;terminal->ToneGenerator.TONE_PROP_PROMPT;captured->ToneGenerator.TONE_PROP_BEEP2;else->ToneGenerator.TONE_PROP_BEEP}
-   tone?.startTone(type,if(terminal)220 else 45)
-   if(terminal){delay(250);tone?.stopTone()}
+  val quiet=manager==null || manager.ringerMode!=AudioManager.RINGER_MODE_NORMAL || manager.getStreamVolume(AudioManager.STREAM_MUSIC)==0
+  if(!quiet && prefs.getBoolean("sound",false))withContext(Dispatchers.Default){
+   runCatching{sound.play(current.board.count{it!='.'}<old.board.count{it!='.'},terminal,result.contains("Ничья",true))}
   }
-  if(!quiet && prefs.getBoolean("haptic",false)) {
+  if(!quiet && prefs.getBoolean("haptic",false)){
    val vibrator=if(Build.VERSION.SDK_INT>=31)context.getSystemService(VibratorManager::class.java)?.defaultVibrator else context.getSystemService(Vibrator::class.java)
    runCatching{vibrator?.vibrate(VibrationEffect.createOneShot(if(terminal)40L else 12L,VibrationEffect.DEFAULT_AMPLITUDE))}
   }
  }
 }
-
 @Composable internal fun FeedbackControls(){
  val context=LocalContext.current
  val prefs=remember{context.getSharedPreferences("feedback",0)}
  var sound by remember{mutableStateOf(prefs.getBoolean("sound",false))}
  var vibration by remember{mutableStateOf(prefs.getBoolean("haptic",false))}
  Text("Звук и отклик",style=MaterialTheme.typography.titleMedium)
- Row{Text("Короткие сигналы партии",Modifier.weight(1f));Switch(checked=sound,onCheckedChange={sound=it;prefs.edit().putBoolean("sound",it).apply()})}
+ Row{Text("Щелчки фигур и взятий",Modifier.weight(1f));Switch(checked=sound,onCheckedChange={sound=it;prefs.edit().putBoolean("sound",it).apply()})}
  Row{Text("Лёгкая вибрация",Modifier.weight(1f));Switch(checked=vibration,onCheckedChange={vibration=it;prefs.edit().putBoolean("haptic",it).apply()})}
- Text("По умолчанию выключены. В беззвучном режиме отклик не воспроизводится. Сигналы пока системные, не записанные звуковые ассеты.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+ Text("Короткие оригинальные звуки, без загрузки из сети. В беззвучном режиме отклик отключён.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }
