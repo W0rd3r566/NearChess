@@ -9,14 +9,31 @@ enum class BotLevel(val title:String,val depth:Int,val budget:Int,val positional
  STRATEGIST("Стратег",5,45000,true), EXPERT("Эксперт",6,100000,true),
  MASTER("Мастер",7,220000,true), MAXIMUM("Максимум",9,450000,true)
 }
+enum class BotTempo(val minimumMillis:Long,val variationMillis:Long){
+ INSTANT(0,0), NATURAL(1400,700), RELAXED(2400,900)
+}
 data class BotSearchResult(val move:Move?,val completedDepth:Int,val nodes:Int)
-internal suspend fun chooseTrainingMove(p:Position,level:BotLevel=BotLevel.STUDENT):Move?{
- val start=System.nanoTime()
- val result=searchTraining(p,level)
- val target=850L+((p.board.hashCode().toLong() and 0x7fffffff)%550)
- val elapsed=(System.nanoTime()-start)/1000000
- if(result.move!=null && elapsed<target)delay(target-elapsed)
- return result.move
+
+/** Minimum time includes calculation, not an additional blocking sleep. */
+internal suspend fun pacedBotReply(
+ minimumMillis:Long,
+ nowNanos:()->Long={System.nanoTime()},
+ wait:suspend (Long)->Unit={delay(it)},
+ calculate:suspend ()->Move?
+):Move?{
+ require(minimumMillis>=0)
+ val start=nowNanos()
+ val move=calculate()?:return null
+ currentCoroutineContext().ensureActive()
+ val elapsed=((nowNanos()-start)/1000000).coerceAtLeast(0)
+ val remaining=(minimumMillis-elapsed).coerceAtLeast(0)
+ if(remaining>0)wait(remaining)
+ currentCoroutineContext().ensureActive()
+ return move
+}
+internal suspend fun chooseTrainingMove(p:Position,level:BotLevel=BotLevel.STUDENT,tempo:BotTempo=BotTempo.NATURAL):Move?{
+ val variation=if(tempo.variationMillis==0L)0L else (p.board.hashCode().toLong() and 0x7fffffff)%tempo.variationMillis
+ return pacedBotReply(tempo.minimumMillis+variation){searchTraining(p,level).move}
 }
 internal suspend fun searchTraining(position:Position,level:BotLevel):BotSearchResult {
  val ctx=currentCoroutineContext();var nodes=0
@@ -58,7 +75,6 @@ internal suspend fun searchTraining(position:Position,level:BotLevel):BotSearchR
     if(v>score){score=v;candidate=m}
    }
    if(level==BotLevel.NOVICE || level==BotLevel.AMATEUR){
-    // Controlled suboptimality among evaluated legal moves; never arbitrary illegal moves.
     val allowance=if(level==BotLevel.NOVICE)220 else 90
     val choices=scored.filter{it.second>=score-allowance}.sortedByDescending{it.second}
     if(choices.isNotEmpty()){
