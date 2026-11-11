@@ -68,7 +68,7 @@ val boardPalettes=listOf(BoardPalette("Мята",0xFFE7E8D5,0xFF56877C),BoardPal
  val check=remember(position){position.check()}
  val king=position.board.indexOf(if(position.white)'K' else 'k')
  val activity=context as? android.app.Activity
- val viewerWhite=when(activity){is NearbyActivity->!flipped;is MainActivity->if(context.getSharedPreferences("game",0).getBoolean("bot",false))true else null;else->null}
+ val viewerWhite=when(activity){is NearbyActivity->!flipped;is MainActivity->if(context.getSharedPreferences("game",0).getBoolean("bot",false))context.getSharedPreferences("game",0).getBoolean("playerWhite",true) else null;else->null}
  Column {
   Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
    Canvas(Modifier.matchParentSize().onSizeChanged{width=it.width}
@@ -79,7 +79,6 @@ val boardPalettes=listOf(BoardPalette("Мята",0xFFE7E8D5,0xFF56877C),BoardPal
     fun piece(sq:Int,at:Offset,scale:Float=1f){graphics?.draw(drawContext.canvas.nativeCanvas,position.board[sq],at.x,at.y,cell*.92f*scale)}
     val m=animated
     val rookTo=if(m!=null && position.board[m.to].uppercaseChar()=='K' && kotlin.math.abs(m.to-m.from)==2)if(m.to>m.from)m.from+1 else m.from-1 else -1
-    // Paint all cells first, then pieces: moving pieces must not be covered by later cells.
     for(sq in 0..63){
      val c=center(sq);val top=c-Offset(cell/2,cell/2);val sizeCell=androidx.compose.ui.geometry.Size(cell,cell)
      drawRect(if((sq%8+sq/8)%2==0)Color(palette.dark)else Color(palette.light),top,sizeCell)
@@ -104,7 +103,7 @@ val boardPalettes=listOf(BoardPalette("Мята",0xFFE7E8D5,0xFF56877C),BoardPal
   listOf("cburnett","chessnut","spatial").forEach{s->TextButton(onClick={set=s;prefs.edit().putString("pieces",s).apply()}){Text((if(set==s)"✓ " else "")+s.replaceFirstChar{it.uppercase()})}}
   Row{Text("Анимации и эффекты",Modifier.weight(1f));Switch(checked=animEnabled,onCheckedChange={animEnabled=it;prefs.edit().putBoolean("animations",it).apply()})}
  }},confirmButton={TextButton(onClick={settings=false}){Text("Готово")}})
- if(promotion.isNotEmpty())AlertDialog(onDismissRequest={promotion=emptyList()},title={Text("Превращение")},text={Column{promotion.forEach{m->TextButton(onClick={promotion=emptyList();selected=null;currentMove(m)}){Text(when(m.promotion){'q'->"Ферзь";'r'->"Ладья";'b'->"Слон";else->"Конь"})}}}},confirmButton={})
+ if(promotion.isNotEmpty())PromotionChoice(promotion,position.white,set,onDismiss={promotion=emptyList()},onChoose={m->if(enabled && m in moves){promotion=emptyList();selected=null;currentMove(m)}})
 }
 @Composable fun PlayerAvatar(index:Int,modifier:Modifier=Modifier){
  val colors=listOf(Color(0xFF71D8BC),Color(0xFFE9C96B),Color(0xFFADA0E8),Color(0xFF82B9ED))
