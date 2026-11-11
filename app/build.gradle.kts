@@ -5,6 +5,9 @@ plugins {
  id("org.jetbrains.kotlin.android")
  id("org.jetbrains.kotlin.plugin.compose")
 }
+val buildNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()
+val ciVersionCode = buildNumber?.let { 1000 + it } ?: 3
+val ciVersionName = "0.3.0-alpha" + (buildNumber?.let { ".${it}" } ?: "-local")
 val pieceAssets = layout.buildDirectory.dir("generated/pieceAssets")
 val preparePieces by tasks.registering {
  outputs.dir(pieceAssets)
@@ -32,7 +35,7 @@ val preparePieces by tasks.registering {
 android {
  namespace = "dev.nearchess"
  compileSdk = 35
- defaultConfig { applicationId = "dev.nearchess"; minSdk = 26; targetSdk = 35; versionCode = 2; versionName = "0.2.0-dev" }
+ defaultConfig { applicationId = "dev.nearchess"; minSdk = 26; targetSdk = 35; versionCode = ciVersionCode; versionName = ciVersionName }
  sourceSets.getByName("main").assets.srcDir(pieceAssets)
  buildFeatures { compose = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
