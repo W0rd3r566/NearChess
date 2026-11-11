@@ -113,6 +113,7 @@ class LaunchActivity:ComponentActivity(){override fun onCreate(savedInstanceStat
   Text("О NearChess",style=MaterialTheme.typography.titleMedium)
   val version=remember{runCatching{context.packageManager.getPackageInfo(context.packageName,0).versionName}.getOrNull()?:""}
   Text("Версия $version",style=MaterialTheme.typography.bodySmall)
+  SourceCodeLink()
   Spacer(Modifier.height(8.dp))
  }
 }
